@@ -17,9 +17,8 @@ if not firebase_admin._apps:
     import json
     import streamlit as st
     from firebase_admin import credentials
+    cred = credentials.Certificate(st.secrets["firebase"])
 
-    firebase_json = json.loads(st.secrets["firebase"])
-    cred = credentials.Certificate(firebase_json)
 
     firebase_admin.initialize_app(cred, {
         'databaseURL': FIREBASE_URL,
