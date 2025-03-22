@@ -14,7 +14,13 @@ FIREBASE_BUCKET = "vit-chitchat-36032.appspot.com"  # Change to your Firebase St
 
 # Initialize Firebase
 if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase_credentials.json")
+    import json
+    import streamlit as st
+    from firebase_admin import credentials
+
+    firebase_json = json.loads(st.secrets["firebase"])
+    cred = credentials.Certificate(firebase_json)
+
     firebase_admin.initialize_app(cred, {
         'databaseURL': FIREBASE_URL,
         'storageBucket': FIREBASE_BUCKET
