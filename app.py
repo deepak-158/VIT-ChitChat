@@ -8,42 +8,42 @@ import base64
 from PIL import Image
 import io
 
-# Firebase Configuration
-FIREBASE_URL = "https://vit-chitchat-36032-default-rtdb.firebaseio.com/"  # Change to your Firebase URL
-FIREBASE_BUCKET = "vit-chitchat-36032.appspot.com"  # Change to your Firebase Storage bucket
+# Initialize Firebase with Streamlit Secrets
+firebase_secrets = st.secrets["firebase"]
 
-# Initialize Firebase
 if not firebase_admin._apps:
-    import json
-    import streamlit as st
-    from firebase_admin import credentials
-    cred = credentials.Certificate(st.secrets["firebase"])
-
-
+    cred = credentials.Certificate(dict(firebase_secrets))
     firebase_admin.initialize_app(cred, {
-        'databaseURL': FIREBASE_URL,
-        'storageBucket': FIREBASE_BUCKET
+        'databaseURL': firebase_secrets["databaseURL"],
+        'storageBucket': firebase_secrets["storageBucket"]
     })
 
-# Reference to Firebase Database
+# Firebase References
 chat_ref = db.reference("messages")
+rooms_ref = db.reference("chatrooms")
 
 # Generate a Random Username
 def generate_username():
     return "User_" + "".join(random.choices(string.ascii_letters + string.digits, k=5))
 
-# Get Previous Messages from Firebase
+# Get Messages from Firebase
 @st.cache_data(ttl=10)
-def get_messages():
-    messages = chat_ref.get()
+def get_messages(room):
+    messages = db.reference(f"messages/{room}").get()
     return messages if messages else {}
 
-# Upload Image to Firebase Storage and Get URL
+# Get Available Chat Rooms
+@st.cache_data(ttl=10)
+def get_chatrooms():
+    rooms = rooms_ref.get()
+    return rooms if rooms else {}
+
+# Upload Image to Firebase Storage
 def upload_image(image):
     bucket = storage.bucket()
     blob = bucket.blob(f"chat_images/{time.time()}.png")
     blob.upload_from_string(image, content_type="image/png")
-    return blob.public_url  # Get the image URL
+    return blob.public_url
 
 # Convert Image to Base64 for Firebase Storage
 def encode_image(image):
@@ -54,7 +54,7 @@ def encode_image(image):
 # Streamlit UI
 st.title("💬 VIT Anonymous Chat Room")
 
-# Sidebar for Username
+# Sidebar for Username and Room Selection
 if "username" not in st.session_state:
     st.session_state["username"] = generate_username()
 
@@ -63,17 +63,27 @@ custom_username = st.sidebar.text_input("Set Custom Username", max_chars=15)
 if custom_username:
     st.session_state["username"] = custom_username
 
+# Select or Create Chat Room
+st.sidebar.subheader("🔹 Select a Chat Room")
+chatrooms = get_chatrooms()
+room_list = list(chatrooms.keys()) if chatrooms else ["General"]
+selected_room = st.sidebar.selectbox("Choose a room", room_list)
+
+new_room = st.sidebar.text_input("Create New Room")
+if st.sidebar.button("Create Room") and new_room:
+    rooms_ref.child(new_room).set({"created_at": time.time()})
+    st.experimental_rerun()
+
+st.subheader(f"📜 Chat History - {selected_room}")
+messages = get_messages(selected_room)
+
 # Display Chat Messages
-st.subheader("📜 Chat History")
-messages = get_messages()
 for msg_id, msg_data in messages.items():
     username = msg_data.get("username", "Anonymous")
     text = msg_data.get("text", "")
     img_data = msg_data.get("image", None)
 
     st.write(f"**{username}**: {text}")
-    
-    # Show image if exists
     if img_data:
         image = Image.open(io.BytesIO(base64.b64decode(img_data)))
         st.image(image, caption="📷 Image", use_column_width=True)
@@ -93,13 +103,10 @@ if st.button("Send"):
             "timestamp": time.time()
         }
         
-        # Handle image upload
         if image_file:
             image = Image.open(image_file)
             encoded_img = encode_image(image)
             data["image"] = encoded_img
-        
-        chat_ref.push(data)  # Store message in Firebase
-        st.rerun()
-  # Refresh chat
 
+        db.reference(f"messages/{selected_room}").push(data)
+        st.rerun()
