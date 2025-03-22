@@ -72,7 +72,7 @@ selected_room = st.sidebar.selectbox("Choose a room", room_list)
 new_room = st.sidebar.text_input("Create New Room")
 if st.sidebar.button("Create Room") and new_room:
     rooms_ref.child(new_room).set({"created_at": time.time()})
-    st.experimental_rerun()
+    st.rerun()
 
 st.subheader(f"📜 Chat History - {selected_room}")
 messages = get_messages(selected_room)
